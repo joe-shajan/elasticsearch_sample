@@ -1,39 +1,63 @@
-import { Box, Checkbox, FormControlLabel } from "@mui/material";
+import { Box, Checkbox, FormControlLabel, Typography } from "@mui/material";
 import React from "react";
 
-const FilterSidebar = ({ facetes }) => {
+const FilterSidebar = ({
+  facetes,
+  categories,
+  selectedCategory,
+  selectCategory,
+  checkBoxChange,
+  filters,
+}) => {
+  console.log(facetes);
   return (
     <div>
-      <h3>category_filter</h3>
+      <h3>category</h3>
       <Box sx={{ display: "flex", flexDirection: "column" }}>
-        {facetes.category_filter &&
-          facetes.category_filter.buckets.map(({ key, doc_count }, i) => (
-            <FormControlLabel
-              key={i}
-              control={<Checkbox />}
-              label={`${key} (${doc_count})`}
-            />
-          ))}
+        {categories.map(({ key, doc_count }, i) => (
+          <Typography
+            sx={{
+              fontWeight: key === selectedCategory ? 600 : 400,
+              cursor: "pointer",
+            }}
+            key={i}
+            onClick={() => selectCategory(key)}
+          >
+            {key}
+          </Typography>
+        ))}
       </Box>
 
-      {Object.entries(facetes).map(([filterName, data], index) => (
-        <>
-          {filterName !== "category_filter" && (
-            <>
-              <h3 key={index}>{filterName}</h3>
+      {selectedCategory &&
+        Object.entries(facetes).map(([filterName, data], index) => {
+          if (filterName === "category") return;
+
+          return (
+            <div key={index}>
+              <h3>{filterName}</h3>
               <Box sx={{ display: "flex", flexDirection: "column" }}>
-                {data.buckets.map(({ key, doc_count }, i) => (
+                {data.map(({ key, doc_count }, i) => (
                   <FormControlLabel
                     key={i}
-                    control={<Checkbox />}
+                    control={
+                      <Checkbox
+                        checked={
+                          filters[filterName]
+                            ? filters[filterName].includes(key)
+                              ? true
+                              : false
+                            : false
+                        }
+                        onChange={(e) => checkBoxChange(e, filterName, key)}
+                      />
+                    }
                     label={`${key} (${doc_count})`}
                   />
                 ))}
               </Box>
-            </>
-          )}
-        </>
-      ))}
+            </div>
+          );
+        })}
     </div>
   );
 };

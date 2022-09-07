@@ -69,31 +69,7 @@ app.get("/products", async (req, res) => {
   res.send(result);
 });
 
-// app.get("/facetes", async (req, res) => {
-//   const result = await elasticClient.search({
-//     index: indexName,
-//     aggs: {
-//       category_filter: {
-//         terms: {
-//           field: "category",
-//         },
-//       },
-//       color_filter: {
-//         terms: {
-//           field: "color",
-//         },
-//       },
-//       size_filter: {
-//         terms: {
-//           field: "size",
-//         },
-//       },
-//     },
-//   });
-//   res.send(result);
-// });
-
-app.get("/facetes", async (req, res) => {
+app.get("/facetes-category", async (req, res) => {
   const result = await elasticClient.search({
     index: indexName,
     aggs: {
@@ -117,6 +93,146 @@ app.get("/facetes", async (req, res) => {
   res.send(result);
 });
 
-// Express routes
+const aggregation = (name) => {
+  return {
+    facets: {
+      nested: {
+        path: "string_facet",
+      },
+      aggs: {
+        aggs_special: {
+          filter: {
+            match: {
+              "string_facet.facet_name": name,
+            },
+          },
+          aggs: {
+            names: {
+              terms: {
+                field: "string_facet.facet_name",
+              },
+              aggs: {
+                values: {
+                  terms: {
+                    field: "string_facet.facet_value",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    },
+  };
+};
+
+const flterQuery = (name, value) => {
+  return {
+    nested: {
+      path: "string_facet",
+      query: {
+        bool: {
+          filter: [
+            {
+              term: {
+                "string_facet.facet_name": name,
+              },
+            },
+            {
+              term: {
+                "string_facet.facet_value": value,
+              },
+            },
+          ],
+        },
+      },
+    },
+  };
+};
+
+app.get("/facetes", async (req, res) => {
+  const { category, filters } = req.query;
+
+  const filtersObject = JSON.parse(filters);
+  console.log(filtersObject);
+
+  let filtersToApply = [];
+  let filtersToApplyExceptColor = [];
+  let filtersToApplyExceptSize = [];
+
+  if (category) {
+    filtersToApply.push(flterQuery("category", category));
+    filtersToApplyExceptColor.push(flterQuery("category", category));
+    filtersToApplyExceptSize.push(flterQuery("category", category));
+  }
+
+  if (Object.keys(filtersObject).length) {
+    Object.entries(filtersObject).forEach(([facetName, filterValues]) => {
+      filtersToApply.push(flterQuery(facetName, filterValues[0]));
+      if (facetName !== "color")
+        filtersToApplyExceptColor.push(flterQuery(facetName, filterValues[0]));
+      if (facetName !== "size")
+        filtersToApplyExceptSize.push(flterQuery(facetName, filterValues[0]));
+    });
+  }
+
+  const result = await elasticClient.search({
+    index: indexName,
+    aggs: {
+      aggs_all_filters: {
+        filter: {
+          bool: {
+            filter: filtersToApply,
+          },
+        },
+        aggs: {
+          facets: {
+            nested: {
+              path: "string_facet",
+            },
+            aggs: {
+              names: {
+                terms: {
+                  field: "string_facet.facet_name",
+                },
+                aggs: {
+                  values: {
+                    terms: {
+                      field: "string_facet.facet_value",
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+
+      aggs_color: {
+        filter: {
+          bool: {
+            filter: filtersToApplyExceptColor,
+          },
+        },
+        aggs: aggregation("color"),
+      },
+
+      aggs_size: {
+        filter: {
+          bool: {
+            filter: filtersToApplyExceptSize,
+          },
+        },
+        aggs: aggregation("size"),
+      },
+    },
+    post_filter: {
+      bool: {
+        filter: filtersToApply,
+      },
+    },
+  });
+  res.send(result);
+});
 
 app.listen(8080, () => console.log("server started"));

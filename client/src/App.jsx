@@ -38,8 +38,17 @@ const api = {
 
     return response.data;
   },
-  async getallFacetes() {
-    const response = await axios.get("/api/facetes");
+  async getallFacetes(selectedCategory, filters) {
+    const response = await axios.get(
+      `/api/facetes?category=${selectedCategory}&filters=${JSON.stringify(
+        filters
+      )}`
+    );
+
+    return response.data;
+  },
+  async getallCategoryFacetes() {
+    const response = await axios.get("/api/facetes-category");
 
     return response.data;
   },
@@ -93,6 +102,10 @@ const App = () => {
   const [facetes, setFacetes] = useState({});
   const [selection, setSelection] = useState([]);
   const [query, setQuery] = useState("");
+  const [categories, setCategories] = useState([]);
+  const [selectedCategory, setSelectedCategory] = useState("");
+  const [filters, setFilters] = useState({});
+  const [updated, setUpdated] = useState(false);
 
   const addProduct = async (e) => {
     e.preventDefault();
@@ -114,7 +127,7 @@ const App = () => {
 
   const search = async () => {
     const response = await api.search(query);
-    console.log(response);
+    // console.log(response);
     setSelection(
       response.hits.hits.map((hit) => {
         return hit._id;
@@ -122,36 +135,157 @@ const App = () => {
     );
   };
 
+  const productToArrayOfObjects = (hits) => {
+    let array = [];
+    hits.forEach((hit) => {
+      let obj = {};
+      obj.id = hit._id;
+      obj.name = hit._source.name;
+      hit._source.string_facet.forEach(({ facet_name, facet_value }) => {
+        obj[facet_name] = facet_value;
+      });
+      array.push(obj);
+    });
+    return array;
+  };
+
+  const selectCategory = (category) => {
+    setSelectedCategory(category);
+  };
+
+  const checkBoxChange = (e, filterName, key) => {
+    setFilters((prevFilters) => {
+      if (e.target.checked) {
+        if (filterName in prevFilters) prevFilters[filterName].push(key);
+        else prevFilters[filterName] = [key];
+      } else {
+        const facetValIndex = prevFilters[filterName].indexOf(key);
+        prevFilters[filterName].splice(facetValIndex, 1);
+
+        if (prevFilters[filterName].length === 0)
+          delete prevFilters[filterName];
+      }
+
+      return prevFilters;
+    });
+
+    setUpdated((prev) => !prev);
+  };
+
   useEffect(() => {
     api.getallProducts().then((response) => {
-      let array = [];
-      response.hits.hits.forEach((hit) => {
-        let obj = {};
-        obj.id = hit._id;
-        obj.name = hit._source.name;
-        hit._source.string_facet.forEach(({ facet_name, facet_value }) => {
-          obj[facet_name] = facet_value;
-        });
-        array.push(obj);
-      });
+      let array = productToArrayOfObjects(response.hits.hits);
 
       setProducts(array);
     });
   }, []);
 
   useEffect(() => {
-    api.getallFacetes().then((response) => {
-      console.log(response.aggregations);
-      // setFacetes(response.aggregations);
+    api.getallCategoryFacetes().then((response) => {
+      const categoryFacet = response.aggregations.facets.names.buckets.find(
+        (facet) => facet.key === "category"
+      );
+
+      const newCategories = categoryFacet.values.buckets;
+      setCategories(newCategories);
     });
-  }, [products]);
+  }, []);
+
+  useEffect(() => {
+    if (!selectedCategory) return;
+    console.log(filters);
+    api.getallFacetes(selectedCategory, filters).then((response) => {
+      // console.log(response.hits.hits);
+      // console.log(
+      //   response.aggregations.aggs_category.facets.aggs_special.names.buckets
+      // );
+
+      let array = productToArrayOfObjects(response.hits.hits);
+      // console.log(array);
+      setProducts(array);
+
+      // const facets1 = response.aggregations.facets.names.buckets;
+
+      const facets1 =
+        response.aggregations.aggs_all_filters.facets.names.buckets;
+
+      const sizeFacets =
+        response.aggregations.aggs_size?.facets.aggs_special.names.buckets;
+
+      const colorFacets =
+        response.aggregations.aggs_color?.facets.aggs_special.names.buckets;
+
+      let facets = [...facets1];
+
+      console.log(facets);
+
+      if (colorFacets) {
+        const colorFacetsValues = colorFacets[0].values.buckets;
+        facets.forEach((facet) => {
+          if (facet.key === "color") {
+            facet.values.buckets = colorFacetsValues;
+          }
+        });
+      }
+      if (sizeFacets) {
+        const sizeFacetsValues = sizeFacets[0].values.buckets;
+        facets.forEach((facet) => {
+          if (facet.key === "size") {
+            facet.values.buckets = sizeFacetsValues;
+          }
+        });
+      }
+      // const facets = [...facets1];
+
+      // console.log(facets);
+      let obj = {};
+      console.log(facets);
+      facets.forEach((filter) => {
+        if (filter.key in obj) {
+          obj[filter.key] = [...obj[filter.key], ...filter.values.buckets];
+        } else {
+          obj[filter.key] = filter.values.buckets;
+        }
+      });
+      setFacetes(obj);
+
+      // this is how obj should look like
+      // const obj = {
+      //   category: [
+      //     { key: "marble", doc_count: 2 },
+      //     { key: "tiles", doc_count: 2 },
+      //   ],
+      //   color: [
+      //     { key: "green", doc_count: 1 },
+      //     { key: "red", doc_count: 1 },
+      //     { key: "white", doc_count: 1 },
+      //     { key: "yellow", doc_count: 1 },
+      //   ],
+      //   size: [
+      //     { key: "120x120", doc_count: 1 },
+      //     { key: "20x20", doc_count: 1 },
+      //     { key: "20x30", doc_count: 1 },
+      //     { key: "25x35", doc_count: 1 },
+      //   ],
+      // };
+    });
+  }, [selectedCategory, updated]);
 
   return (
     <>
       <Form addProduct={addProduct} />
 
       <Container sx={{ display: "flex" }}>
-        {Object.keys(facetes).length && <FilterSidebar facetes={facetes} />}
+        {/* {Object.keys(facetes).length && (
+          )} */}
+        <FilterSidebar
+          facetes={facetes}
+          categories={categories}
+          selectedCategory={selectedCategory}
+          selectCategory={selectCategory}
+          checkBoxChange={checkBoxChange}
+          filters={filters}
+        />
 
         <Container maxWidth="md">
           <TextField

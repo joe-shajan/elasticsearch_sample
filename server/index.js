@@ -4,7 +4,6 @@ const elasticClient = require("./elastic-client");
 const createIndex = require("./create-index");
 const { indexName } = require("./constants");
 require("express-async-errors");
-console.log(indexName);
 const app = express();
 
 app.use(bodyParser.json());
@@ -14,19 +13,6 @@ app.use(bodyParser.json());
 app.get("/", (req, res) => {
   res.redirect("http://localhost:3000/");
 });
-
-// app.post("/product", async (req, res) => {
-//   const result = await elasticClient.index({
-//     index: indexName,
-//     document: {
-//       name: req.body.name,
-//       category: req.body.category,
-//       color: req.body.color,
-//       size: req.body.size,
-//     },
-//   });
-//   res.send(result);
-// });
 
 app.post("/product", async (req, res) => {
   const { category, color, size } = req.body;
@@ -126,53 +112,89 @@ const aggregation = (name) => {
   };
 };
 
-const flterQuery = (name, value) => {
-  return {
-    nested: {
-      path: "string_facet",
-      query: {
-        bool: {
-          filter: [
-            {
-              term: {
-                "string_facet.facet_name": name,
+const shouldFilterArray = (values) => {
+  let array = [];
+  values.forEach((value) => {
+    array.push({
+      term: {
+        "string_facet.facet_value": value,
+      },
+    });
+  });
+
+  return array;
+};
+
+const flterQuery = (name, values) => {
+  if (values.length > 1) {
+    return {
+      nested: {
+        path: "string_facet",
+        query: {
+          bool: {
+            filter: [
+              {
+                term: {
+                  "string_facet.facet_name": name,
+                },
               },
-            },
-            {
-              term: {
-                "string_facet.facet_value": value,
+              {
+                bool: {
+                  should: shouldFilterArray(values),
+                },
               },
-            },
-          ],
+            ],
+          },
         },
       },
-    },
-  };
+    };
+  } else {
+    return {
+      nested: {
+        path: "string_facet",
+        query: {
+          bool: {
+            filter: [
+              {
+                term: {
+                  "string_facet.facet_name": name,
+                },
+              },
+              {
+                term: {
+                  "string_facet.facet_value": values[0],
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+  }
 };
 
 app.get("/facetes", async (req, res) => {
   const { category, filters } = req.query;
 
   const filtersObject = JSON.parse(filters);
-  console.log(filtersObject);
 
   let filtersToApply = [];
   let filtersToApplyExceptColor = [];
   let filtersToApplyExceptSize = [];
 
   if (category) {
-    filtersToApply.push(flterQuery("category", category));
-    filtersToApplyExceptColor.push(flterQuery("category", category));
-    filtersToApplyExceptSize.push(flterQuery("category", category));
+    filtersToApply.push(flterQuery("category", [category]));
+    filtersToApplyExceptColor.push(flterQuery("category", [category]));
+    filtersToApplyExceptSize.push(flterQuery("category", [category]));
   }
 
   if (Object.keys(filtersObject).length) {
     Object.entries(filtersObject).forEach(([facetName, filterValues]) => {
-      filtersToApply.push(flterQuery(facetName, filterValues[0]));
+      filtersToApply.push(flterQuery(facetName, filterValues));
       if (facetName !== "color")
-        filtersToApplyExceptColor.push(flterQuery(facetName, filterValues[0]));
+        filtersToApplyExceptColor.push(flterQuery(facetName, filterValues));
       if (facetName !== "size")
-        filtersToApplyExceptSize.push(flterQuery(facetName, filterValues[0]));
+        filtersToApplyExceptSize.push(flterQuery(facetName, filterValues));
     });
   }
 

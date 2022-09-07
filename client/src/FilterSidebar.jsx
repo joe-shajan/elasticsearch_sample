@@ -9,7 +9,6 @@ const FilterSidebar = ({
   checkBoxChange,
   filters,
 }) => {
-  console.log(facetes);
   return (
     <div>
       <h3>category</h3>

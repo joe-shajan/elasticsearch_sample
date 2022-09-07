@@ -127,7 +127,6 @@ const App = () => {
 
   const search = async () => {
     const response = await api.search(query);
-    // console.log(response);
     setSelection(
       response.hits.hits.map((hit) => {
         return hit._id;
@@ -151,6 +150,7 @@ const App = () => {
 
   const selectCategory = (category) => {
     setSelectedCategory(category);
+    setFilters({});
   };
 
   const checkBoxChange = (e, filterName, key) => {
@@ -193,18 +193,9 @@ const App = () => {
 
   useEffect(() => {
     if (!selectedCategory) return;
-    console.log(filters);
     api.getallFacetes(selectedCategory, filters).then((response) => {
-      // console.log(response.hits.hits);
-      // console.log(
-      //   response.aggregations.aggs_category.facets.aggs_special.names.buckets
-      // );
-
       let array = productToArrayOfObjects(response.hits.hits);
-      // console.log(array);
       setProducts(array);
-
-      // const facets1 = response.aggregations.facets.names.buckets;
 
       const facets1 =
         response.aggregations.aggs_all_filters.facets.names.buckets;
@@ -216,8 +207,6 @@ const App = () => {
         response.aggregations.aggs_color?.facets.aggs_special.names.buckets;
 
       let facets = [...facets1];
-
-      console.log(facets);
 
       if (colorFacets) {
         const colorFacetsValues = colorFacets[0].values.buckets;
@@ -235,11 +224,8 @@ const App = () => {
           }
         });
       }
-      // const facets = [...facets1];
 
-      // console.log(facets);
       let obj = {};
-      console.log(facets);
       facets.forEach((filter) => {
         if (filter.key in obj) {
           obj[filter.key] = [...obj[filter.key], ...filter.values.buckets];
@@ -248,26 +234,6 @@ const App = () => {
         }
       });
       setFacetes(obj);
-
-      // this is how obj should look like
-      // const obj = {
-      //   category: [
-      //     { key: "marble", doc_count: 2 },
-      //     { key: "tiles", doc_count: 2 },
-      //   ],
-      //   color: [
-      //     { key: "green", doc_count: 1 },
-      //     { key: "red", doc_count: 1 },
-      //     { key: "white", doc_count: 1 },
-      //     { key: "yellow", doc_count: 1 },
-      //   ],
-      //   size: [
-      //     { key: "120x120", doc_count: 1 },
-      //     { key: "20x20", doc_count: 1 },
-      //     { key: "20x30", doc_count: 1 },
-      //     { key: "25x35", doc_count: 1 },
-      //   ],
-      // };
     });
   }, [selectedCategory, updated]);
 
@@ -276,8 +242,6 @@ const App = () => {
       <Form addProduct={addProduct} />
 
       <Container sx={{ display: "flex" }}>
-        {/* {Object.keys(facetes).length && (
-          )} */}
         <FilterSidebar
           facetes={facetes}
           categories={categories}

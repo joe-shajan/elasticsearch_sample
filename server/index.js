@@ -126,51 +126,27 @@ const shouldFilterArray = (values) => {
 };
 
 const flterQuery = (name, values) => {
-  if (values.length > 1) {
-    return {
-      nested: {
-        path: "string_facet",
-        query: {
-          bool: {
-            filter: [
-              {
-                term: {
-                  "string_facet.facet_name": name,
-                },
+  return {
+    nested: {
+      path: "string_facet",
+      query: {
+        bool: {
+          filter: [
+            {
+              term: {
+                "string_facet.facet_name": name,
               },
-              {
-                bool: {
-                  should: shouldFilterArray(values),
-                },
+            },
+            {
+              bool: {
+                should: shouldFilterArray(values),
               },
-            ],
-          },
+            },
+          ],
         },
       },
-    };
-  } else {
-    return {
-      nested: {
-        path: "string_facet",
-        query: {
-          bool: {
-            filter: [
-              {
-                term: {
-                  "string_facet.facet_name": name,
-                },
-              },
-              {
-                term: {
-                  "string_facet.facet_value": values[0],
-                },
-              },
-            ],
-          },
-        },
-      },
-    };
-  }
+    },
+  };
 };
 
 app.get("/facetes", async (req, res) => {
